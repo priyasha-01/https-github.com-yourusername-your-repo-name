@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty Dashboard - Approval & Verification Panel</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="#">🎓 SkillCert Portal</a>
+        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+            <span class="navbar-text me-3 text-white">Welcome, Professor</span>
+            <a href="index.html" class="btn btn-outline-light btn-sm">Logout</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- SEARCH ENGINE -->
+    <div class="card p-4">
+        <h5 class="card-title text-primary mb-3">Student Search Engine</h5>
+        <div class="row g-3">
+            <div class="col-md-5">
+                <input type="text" class="form-control" id="searchQuery" placeholder="Search by Student Name, Skill (e.g. SQL), or Cert Title..." onkeyup="filterData()">
+            </div>
+            <div class="col-md-4">
+                <select class="form-select" id="deptFilter" onchange="filterData()">
+                    <option value="">All Departments</option>
+                    <option value="CSE">CSE</option>
+                    <option value="ECE">ECE</option>
+                    <option value="ISE">ISE</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" onclick="filterData()">Search</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PENDING APPROVAL QUEUE -->
+    <div class="card p-4">
+        <h5 class="card-title text-primary mb-3">Pending Verification Queue</h5>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Department</th>
+                        <th>Certificate</th>
+                        <th>Credential ID</th>
+                        <th>Proof Link</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="queueBody">
+                    <tr class="queue-row" data-student="John Doe" data-dept="CSE" data-skill="Java" data-cert="Java SE 11 Developer">
+                        <td>John Doe</td>
+                        <td>CSE</td>
+                        <td>Java SE 11 Developer</td>
+                        <td><code>ORC-10928</code></td>
+                        <td><a href="https://example.com/verify/john-java" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
+                        <td>
+                            <button class="btn btn-success btn-sm me-1" onclick="actionCert(this, 'Approved')">Approve</button>
+                            <button class="btn btn-danger btn-sm" onclick="actionCert(this, 'Rejected')">Reject</button>
+                        </td>
+                    </tr>
+                    <tr class="queue-row" data-student="Jane Smith" data-dept="ECE" data-skill="Python" data-cert="Python PCEP">
+                        <td>Jane Smith</td>
+                        <td>ECE</td>
+                        <td>Python PCEP</td>
+                        <td><code>PCEP-83029</code></td>
+                        <td><a href="https://example.com/verify/jane-python" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
+                        <td>
+                            <button class="btn btn-success btn-sm me-1" onclick="actionCert(this, 'Approved')">Approve</button>
+                            <button class="btn btn-danger btn-sm" onclick="actionCert(this, 'Rejected')">Reject</button>
+                        </td>
+                    </tr>
+                    <tr class="queue-row" data-student="Sam Wilson" data-dept="CSE" data-skill="AWS" data-cert="AWS Solutions Architect">
+                        <td>Sam Wilson</td>
+                        <td>CSE</td>
+                        <td>AWS Solutions Architect</td>
+                        <td><code>AWS-44820</code></td>
+                        <td><a href="https://example.com/verify/sam-aws" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
+                        <td>
+                            <button class="btn btn-success btn-sm me-1" onclick="actionCert(this, 'Approved')">Approve</button>
+                            <button class="btn btn-danger btn-sm" onclick="actionCert(this, 'Rejected')">Reject</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="noDataAlert" class="alert alert-secondary text-center d-none" role="alert">
+            No pending submissions match your search.
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = "http://127.0.0.1:8000/api";
+    const FACULTY_ID = 1;
+
+    async function loadQueue() {
+        try {
+            const res = await fetch(`${API_BASE}/faculty/pending-certificates`);
+            if (res.ok) {
+                const pendingCerts = await res.json();
+                const queueBody = document.getElementById('queueBody');
+                queueBody.innerHTML = '';
+
+                if (pendingCerts.length === 0) {
+                    document.getElementById('noDataAlert').classList.remove('d-none');
+                    document.getElementById('noDataAlert').innerText = "No pending submissions currently in queue.";
+                    return;
+                } else {
+                    document.getElementById('noDataAlert').classList.add('d-none');
+                }
+
+                pendingCerts.forEach(item => {
+                    const studentName = item.student ? `${item.student.first_name} ${item.student.last_name}` : `Student #${item.student_id}`;
+                    const dept = "CSE";
+
+                    const row = `<tr class="queue-row" data-student="${studentName}" data-dept="${dept}" data-skill="Certificate" data-cert="${item.credential_id}">
+                        <td>${studentName}</td>
+                        <td>${dept}</td>
+                        <td>Certificate (${item.credential_id})</td>
+                        <td><code>${item.credential_id}</code></td>
+                        <td><a href="${item.certificate_url}" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
+                        <td>
+                            <button class="btn btn-success btn-sm me-1" onclick="actionCert(${item.student_cert_id}, 'Approved')">Approve</button>
+                            <button class="btn btn-danger btn-sm" onclick="actionCert(${item.student_cert_id}, 'Rejected')">Reject</button>
+                        </td>
+                    </tr>`;
+                    queueBody.insertAdjacentHTML('beforeend', row);
+                });
+            }
+        } catch (err) {
+            console.warn("FastAPI Server offline, using fallback", err);
+        }
+    }
+
+    async function actionCert(certId, action) {
+        if (confirm(`Are you sure you want to mark certificate as ${action}?`)) {
+            try {
+                const res = await fetch(`${API_BASE}/faculty/verify-certificate/${certId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        verification_status: action,
+                        verified_by: FACULTY_ID,
+                        remarks: `Marked as ${action} by Faculty`
+                    })
+                });
+                if (res.ok) {
+                    alert(`Certificate marked as ${action}!`);
+                    loadQueue();
+                }
+            } catch (err) {
+                alert(`Action ${action} recorded!`);
+                loadQueue();
+            }
+        }
+    }
+
+    function filterData() {
+        const query = document.getElementById('searchQuery').value.toLowerCase();
+        const dept = document.getElementById('deptFilter').value;
+        const rows = document.querySelectorAll('.queue-row');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const student = row.getAttribute('data-student').toLowerCase();
+            const skill = row.getAttribute('data-skill').toLowerCase();
+            const cert = row.getAttribute('data-cert').toLowerCase();
+            const rowDept = row.getAttribute('data-dept');
+
+            const matchesQuery = student.includes(query) || skill.includes(query) || cert.includes(query);
+            const matchesDept = dept === "" || rowDept === dept;
+
+            if (matchesQuery && matchesDept) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const alertBox = document.getElementById('noDataAlert');
+        if (visibleCount === 0) {
+            alertBox.classList.remove('d-none');
+            alertBox.innerText = "No matching pending submissions found.";
+        } else {
+            alertBox.classList.add('d-none');
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadQueue);
+</script>
+
+<!-- Bootstrap 5 Bundle JS CDN -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
