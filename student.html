@@ -174,8 +174,8 @@
     ];
 
     const defaultCerts = [
-        { title: 'AWS Cloud Practitioner', issuer: 'Amazon Web Services', credId: 'AWS-92830', status: 'Approved' },
-        { title: 'Java OCA', issuer: 'Oracle', credId: 'ORC-10928', status: 'Pending' }
+        { title: 'AWS Cloud Practitioner', issuer: 'Amazon Web Services', credId: 'AWS-92830', url: 'https://example.com/verify/aws', status: 'Approved', studentName: 'Alex Johnson', dept: 'CSE' },
+        { title: 'Java OCA', issuer: 'Oracle', credId: 'ORC-10928', url: 'https://example.com/verify/java', status: 'Pending', studentName: 'Alex Johnson', dept: 'CSE' }
     ];
 
     async function loadSavedData() {
@@ -229,7 +229,11 @@
     }
 
     function loadLocalCerts() {
-        const savedCerts = JSON.parse(localStorage.getItem('student_certs')) || defaultCerts;
+        let savedCerts = JSON.parse(localStorage.getItem('student_certs'));
+        if (!savedCerts) {
+            savedCerts = defaultCerts;
+            localStorage.setItem('student_certs', JSON.stringify(savedCerts));
+        }
         document.getElementById('certTableBody').innerHTML = '';
         savedCerts.forEach(item => addCertToTable(item.title, item.issuer, item.credId, item.status));
     }
@@ -269,7 +273,6 @@
 
         addSkillToTable(skill, prof, today);
 
-        // Save to local storage cache
         const savedSkills = JSON.parse(localStorage.getItem('student_skills')) || defaultSkills;
         savedSkills.push({ skill, prof, date: today });
         localStorage.setItem('student_skills', JSON.stringify(savedSkills));
@@ -296,9 +299,17 @@
 
         addCertToTable(title, issuer, credId, 'Pending');
 
-        // Save to local storage cache
-        const savedCerts = JSON.parse(localStorage.getItem('student_certs')) || defaultCerts;
-        savedCerts.push({ title, issuer, credId, status: 'Pending' });
+        // Save complete item to localStorage so faculty page can read studentName, dept, title, credId, url
+        let savedCerts = JSON.parse(localStorage.getItem('student_certs')) || defaultCerts;
+        savedCerts.push({
+            title: title,
+            issuer: issuer,
+            credId: credId,
+            url: url,
+            status: 'Pending',
+            studentName: 'Alex Johnson',
+            dept: 'CSE'
+        });
         localStorage.setItem('student_certs', JSON.stringify(savedCerts));
 
         try {
@@ -310,7 +321,7 @@
         } catch (err) {}
 
         this.reset();
-        alert('Certificate uploaded successfully!');
+        alert('Certificate uploaded successfully! Sent to Faculty queue for review.');
     });
 
     window.addEventListener('DOMContentLoaded', loadSavedData);

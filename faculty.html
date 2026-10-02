@@ -118,65 +118,112 @@
     const API_BASE = "http://127.0.0.1:8000/api";
     const FACULTY_ID = 1;
 
+    const defaultPending = [
+        { title: 'Java OCA', issuer: 'Oracle', credId: 'ORC-10928', url: 'https://example.com/verify/java', status: 'Pending', studentName: 'Alex Johnson', dept: 'CSE' },
+        { title: 'Python PCEP', issuer: 'Python Institute', credId: 'PCEP-83029', url: 'https://example.com/verify/python', status: 'Pending', studentName: 'Jane Smith', dept: 'ECE' }
+    ];
+
     async function loadQueue() {
         try {
             const res = await fetch(`${API_BASE}/faculty/pending-certificates`);
             if (res.ok) {
                 const pendingCerts = await res.json();
-                const queueBody = document.getElementById('queueBody');
-                queueBody.innerHTML = '';
-
-                if (pendingCerts.length === 0) {
-                    document.getElementById('noDataAlert').classList.remove('d-none');
-                    document.getElementById('noDataAlert').innerText = "No pending submissions currently in queue.";
+                if (pendingCerts.length > 0) {
+                    renderQueueFromAPI(pendingCerts);
                     return;
-                } else {
-                    document.getElementById('noDataAlert').classList.add('d-none');
                 }
-
-                pendingCerts.forEach(item => {
-                    const studentName = item.student ? `${item.student.first_name} ${item.student.last_name}` : `Student #${item.student_id}`;
-                    const dept = "CSE";
-
-                    const row = `<tr class="queue-row" data-student="${studentName}" data-dept="${dept}" data-skill="Certificate" data-cert="${item.credential_id}">
-                        <td>${studentName}</td>
-                        <td>${dept}</td>
-                        <td>Certificate (${item.credential_id})</td>
-                        <td><code>${item.credential_id}</code></td>
-                        <td><a href="${item.certificate_url}" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
-                        <td>
-                            <button class="btn btn-success btn-sm me-1" onclick="actionCert(${item.student_cert_id}, 'Approved')">Approve</button>
-                            <button class="btn btn-danger btn-sm" onclick="actionCert(${item.student_cert_id}, 'Rejected')">Reject</button>
-                        </td>
-                    </tr>`;
-                    queueBody.insertAdjacentHTML('beforeend', row);
-                });
             }
         } catch (err) {
-            console.warn("FastAPI Server offline, using fallback", err);
+            console.warn("FastAPI Server offline or empty, loading local queue fallback", err);
         }
+        loadLocalQueue();
     }
 
-    async function actionCert(certId, action) {
+    function renderQueueFromAPI(pendingCerts) {
+        const queueBody = document.getElementById('queueBody');
+        queueBody.innerHTML = '';
+        document.getElementById('noDataAlert').classList.add('d-none');
+
+        pendingCerts.forEach(item => {
+            const studentName = item.student ? `${item.student.first_name} ${item.student.last_name}` : `Student #${item.student_id}`;
+            const dept = "CSE";
+
+            const row = `<tr class="queue-row" data-student="${studentName}" data-dept="${dept}" data-skill="Certificate" data-cert="${item.credential_id}">
+                <td>${studentName}</td>
+                <td>${dept}</td>
+                <td>Certificate (${item.credential_id})</td>
+                <td><code>${item.credential_id}</code></td>
+                <td><a href="${item.certificate_url}" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
+                <td>
+                    <button class="btn btn-success btn-sm me-1" onclick="actionCert(${item.student_cert_id}, 'Approved', '${item.credential_id}')">Approve</button>
+                    <button class="btn btn-danger btn-sm" onclick="actionCert(${item.student_cert_id}, 'Rejected', '${item.credential_id}')">Reject</button>
+                </td>
+            </tr>`;
+            queueBody.insertAdjacentHTML('beforeend', row);
+        });
+    }
+
+    function loadLocalQueue() {
+        let savedCerts = JSON.parse(localStorage.getItem('student_certs')) || defaultPending;
+        const queueBody = document.getElementById('queueBody');
+        queueBody.innerHTML = '';
+
+        const pending = savedCerts.filter(c => c.status === 'Pending');
+
+        if (pending.length === 0) {
+            document.getElementById('noDataAlert').classList.remove('d-none');
+            document.getElementById('noDataAlert').innerText = "No pending submissions currently in queue.";
+            return;
+        } else {
+            document.getElementById('noDataAlert').classList.add('d-none');
+        }
+
+        pending.forEach(item => {
+            const sName = item.studentName || 'Student';
+            const dept = item.dept || 'CSE';
+
+            const row = `<tr class="queue-row" data-student="${sName}" data-dept="${dept}" data-skill="${item.title}" data-cert="${item.title}">
+                <td>${sName}</td>
+                <td>${dept}</td>
+                <td>${item.title}</td>
+                <td><code>${item.credId}</code></td>
+                <td><a href="${item.url || '#'}" target="_blank" class="btn btn-link btn-sm p-0">Verify Document</a></td>
+                <td>
+                    <button class="btn btn-success btn-sm me-1" onclick="actionCert(null, 'Approved', '${item.credId}')">Approve</button>
+                    <button class="btn btn-danger btn-sm" onclick="actionCert(null, 'Rejected', '${item.credId}')">Reject</button>
+                </td>
+            </tr>`;
+            queueBody.insertAdjacentHTML('beforeend', row);
+        });
+    }
+
+    async function actionCert(certId, action, credId) {
         if (confirm(`Are you sure you want to mark certificate as ${action}?`)) {
-            try {
-                const res = await fetch(`${API_BASE}/faculty/verify-certificate/${certId}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        verification_status: action,
-                        verified_by: FACULTY_ID,
-                        remarks: `Marked as ${action} by Faculty`
-                    })
-                });
-                if (res.ok) {
-                    alert(`Certificate marked as ${action}!`);
-                    loadQueue();
-                }
-            } catch (err) {
-                alert(`Action ${action} recorded!`);
-                loadQueue();
+            // 1. Update localStorage cache
+            let savedCerts = JSON.parse(localStorage.getItem('student_certs')) || defaultPending;
+            const idx = savedCerts.findIndex(c => c.credId === credId);
+            if (idx !== -1) {
+                savedCerts[idx].status = action;
+                localStorage.setItem('student_certs', JSON.stringify(savedCerts));
             }
+
+            // 2. Update FastAPI database
+            if (certId) {
+                try {
+                    await fetch(`${API_BASE}/faculty/verify-certificate/${certId}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            verification_status: action,
+                            verified_by: FACULTY_ID,
+                            remarks: `Marked as ${action} by Faculty`
+                        })
+                    });
+                } catch (err) {}
+            }
+
+            alert(`Certificate (${credId}) marked as ${action}!`);
+            loadQueue();
         }
     }
 
